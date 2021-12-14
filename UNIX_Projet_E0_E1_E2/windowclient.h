@@ -1,6 +1,20 @@
 #ifndef WINDOWCLIENT_H
 #define WINDOWCLIENT_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/shm.h>
+#include <sys/sem.h>
+#include <sys/wait.h>
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
+#include <setjmp.h>
 #include <QMainWindow>
 
 QT_BEGIN_NAMESPACE
