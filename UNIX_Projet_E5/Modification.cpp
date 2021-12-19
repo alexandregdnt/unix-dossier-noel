@@ -11,6 +11,8 @@
 #include "protocole.h"
 
 int idQ,idSem;
+struct sembuf operations[1];
+int semDispo = 1;
 
 int main()
 {
@@ -25,6 +27,11 @@ int main()
   }
 
   // Recuperation de l'identifiant du sémaphore
+  if ((idSem = semget(CLE,0,0)) == -1)
+  {
+    perror("Erreur de semget");
+    exit(1);
+  }
 
   MESSAGE m;
   // Lecture de la requête MODIF1
@@ -36,6 +43,13 @@ int main()
   }
 
   // Tentative de prise non bloquante du semaphore 0 (au cas où un autre utilisateut est déjà en train de modifier)
+  operations[0].sem_num = 0;
+  operations[0].sem_op = -1;
+  operations[0].sem_flg = IPC_NOWAIT;
+
+  if (semop(idSem,operations,1) == -1)
+    semDispo = 0;
+
 
   // Connexion à la base de donnée
   MYSQL *connexion = mysql_init(NULL);
@@ -63,10 +77,19 @@ int main()
   m.expediteur = getpid();
   m.requete = MODIF1;
   fprintf(stderr,"%d Envoi de la reponse\n",m.type);
-  strcpy(m.data1, tuple[0]);
-  strcpy(m.data2, tuple[1]);
-  strcpy(m.texte, tuple[2]);
-  fprintf(stderr,"%d %s %s %s\n",m.type, tuple[0], tuple[1], tuple[2]);
+  if(semDispo == 1)
+  {
+    strcpy(m.data1, tuple[0]);
+    strcpy(m.data2, tuple[1]);
+    strcpy(m.texte, tuple[2]);
+  }
+  else
+  {
+    strcpy(m.data1, "KO");
+    strcpy(m.data2, "KO");
+    strcpy(m.texte, "KO");
+  }
+  
 
   if(msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
   {
@@ -75,6 +98,9 @@ int main()
     exit(1);
   }
   kill(m.type, SIGUSR1);
+
+  if(semDispo == 0)
+    exit(0);
   
   // Attente de la requête MODIF2
   fprintf(stderr,"(MODIFICATION %d) Attente requete MODIF2...\n",getpid());
@@ -98,7 +124,15 @@ int main()
 
   // Libération du semaphore 0
   fprintf(stderr,"(MODIFICATION %d) Libération du sémaphore 0\n",getpid());
-
+  if(semDispo == 1)
+  {
+    operations[0].sem_num = 0;
+    operations[0].sem_op = +1;
+    operations[0].sem_flg = 0;
+    if (semop(idSem,operations,1) == -1)
+      perror("(MODIFICATION) Erreur de semop (2)");
+  }
+  
   exit(0);
 }
 

@@ -464,11 +464,16 @@ void WindowClient::on_pushButtonModifier_clicked()
 
   // Attente d'une reponse en provenance de Modification
   fprintf(stderr,"(CLIENT %d) Attente reponse MODIF1\n",getpid());
+  sigset_t mask,oldMask;
+  sigfillset(&mask);
+
+  sigprocmask(SIG_SETMASK,&mask,&oldMask);
   if (msgrcv(idQ, &m, sizeof(MESSAGE) - sizeof(long), getpid(), 0) == -1)
   {
     perror("(CLIENT) Erreur de msgrcv");
     exit(1);
   }
+  sigprocmask(SIG_SETMASK,&oldMask,NULL);
 
   // Verification si la modification est possible
   if (strcmp(m.data1,"KO") == 0 && strcmp(m.data2,"KO") == 0 && strcmp(m.texte,"KO") == 0)
@@ -501,10 +506,6 @@ void WindowClient::on_pushButtonModifier_clicked()
     exit(1);
   }
   
-
-
-
-
 
   timeOut = TIME_OUT;
   alarm(1);

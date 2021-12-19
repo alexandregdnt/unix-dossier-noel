@@ -20,6 +20,13 @@ TAB_CONNEXIONS *tab;
 struct sigaction  Action;
 sigjmp_buf contexte;
 
+union semun
+{
+  int val;
+  struct semid_ds *buf;
+  unsigned short *array;
+} arg;
+
 void afficheTab();
 void handlerSIGINT(int sig);
 void handlerSIGCHLD(int sig);
@@ -54,10 +61,25 @@ int main()
     perror("(SERVEUR) Erreur de msgget");
     exit(1);
   }
+  
   fprintf(stderr,"(SERVEUR %d) Creation de la memoire partagee\n",getpid());
   if ((idShm = shmget(CLE, 200, IPC_CREAT | IPC_EXCL | 0600)) == -1)
   {
     perror("(SERVEUR) Erreur de shmget");
+    exit(1);
+  }
+
+  fprintf(stderr,"(SERVEUR %d) Creation de la sémaphore\n",getpid());
+  if ((idSem = semget(CLE,1,IPC_CREAT | IPC_EXCL | 0600)) == -1)
+  {
+    perror("Erreur de semget");
+    exit(1);
+  }
+
+  arg.val = 1;
+  if (semctl(idSem,0,SETVAL,arg) == -1)
+  {
+    perror("Erreur de semctl (1)");
     exit(1);
   }
 
@@ -98,22 +120,22 @@ int main()
   MYSQL_ROW  tuple;
   PUBLICITE pub;
 
-  sigset_t mask,oldMask;
-  sigfillset(&mask);
-  //sigsetjmp(contexte, 1);
+  /*sigset_t mask,oldMask;
+  sigfillset(&mask);*/
+  sigsetjmp(contexte, 1);
 
   while(1)
   {
   	fprintf(stderr,"(SERVEUR %d) Attente d'une requete...\n",getpid());
     
-    sigprocmask(SIG_SETMASK,&mask,&oldMask);
+    //sigprocmask(SIG_SETMASK,&mask,&oldMask);
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),1,0) == -1)
     {
       perror("(SERVEUR) Erreur de msgrcv - 1");
       msgctl(idQ,IPC_RMID,NULL);
       exit(1);
     }
-    sigprocmask(SIG_SETMASK,&oldMask,NULL);
+    //sigprocmask(SIG_SETMASK,&oldMask,NULL);
     switch(m.requete)
     {
       case CONNECT :  
@@ -560,6 +582,7 @@ void handlerSIGINT(int sig)
   fprintf(stderr, "Reception d un signal %d\n", sig);
   msgctl(idQ, IPC_RMID, NULL);
   shmctl(idShm, IPC_RMID, NULL);
+  semctl(idSem,0,IPC_RMID);
   mysql_close(connexion);
   exit(0);
 }
@@ -579,6 +602,6 @@ void handlerSIGCHLD(int sig)
     tab->connexions[i].pidModification = 0;
   }
 
-  //siglongjmp(contexte, 1);
+  siglongjmp(contexte, 1);
 }
 

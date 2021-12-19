@@ -11,6 +11,7 @@
 #include "protocole.h"
 
 int idQ,idSem;
+struct sembuf operations[1];
 
 int main()
 {
@@ -23,6 +24,11 @@ int main()
   }
 
   // Recuperation de l'identifiant du sémaphore
+  if ((idSem = semget(CLE,0,0)) == -1)
+  {
+    perror("Erreur de semget");
+    exit(1);
+  }
 
   MESSAGE m;
   // Lecture de la requête CONSULT
@@ -35,6 +41,12 @@ int main()
 
   // Tentative de prise bloquante du semaphore 0
   fprintf(stderr,"(CONSULTATION %d) Prise bloquante du sémaphore 0\n",getpid());
+  operations[0].sem_num = 0;
+  operations[0].sem_op = -1;
+  operations[0].sem_flg = 0;
+
+  if (semop(idSem,operations,1) == -1)
+    perror("(CONSULTATION) Erreur de semop (1)");
 
   // Connexion à la base de donnée
   MYSQL *connexion = mysql_init(NULL);
@@ -82,6 +94,12 @@ int main()
 
   // Libération du semaphore 0
   fprintf(stderr,"(CONSULTATION %d) Libération du sémaphore 0\n",getpid());
+  operations[0].sem_num = 0;
+  operations[0].sem_op = +1;
+  operations[0].sem_flg = 0;
+
+  if (semop(idSem,operations,1) == -1)
+    perror("(CONSULTATION) Erreur de semop (2)");
 
   exit(0);
 }
