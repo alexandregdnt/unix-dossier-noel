@@ -5,6 +5,7 @@
 #include <sys/msg.h>
 
 extern int idQ;
+MESSAGE message;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,21 +97,67 @@ int WindowAdmin::getNbSecondes()
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void WindowAdmin::on_pushButtonAjouterUtilisateur_clicked()
 {
-  // TO DO
+  message.type = 1;
+  message.expediteur = getpid();
+  message.requete = NEW_USER;
+  strcpy(message.data1, getNom());
+  strcpy(message.data2, getMotDePasse());
+  if(msgsnd(idQ, &message, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+  {
+    msgctl(idQ, IPC_RMID, NULL);
+    perror("(ADMIN) Erreur de msgsnd - 2");
+    exit(1);
+  }
+
+  setNom("");
+  setMotDePasse("");
 }
 
 void WindowAdmin::on_pushButtonSupprimerUtilisateur_clicked()
 {
-  // TO DO
+  message.type = 1;
+  message.expediteur = getpid();
+  message.requete = DELETE_USER;
+  strcpy(message.data1, getNom());
+  if(msgsnd(idQ, &message, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+  {
+    msgctl(idQ, IPC_RMID, NULL);
+    perror("(ADMIN) Erreur de msgsnd - 2");
+    exit(1);
+  }
+
+  setNom("");
+  setMotDePasse("");
 }
 
 void WindowAdmin::on_pushButtonAjouterPublicite_clicked()
 {
-  // TO DO
+  message.type = 1;
+  message.expediteur = getpid();
+  message.requete = NEW_PUB;
+  sprintf(message.data1, "%d", getNbSecondes());
+  strcpy(message.texte, getTexte());
+  if(msgsnd(idQ, &message, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+  {
+    msgctl(idQ, IPC_RMID, NULL);
+    perror("(ADMIN) Erreur de msgsnd - 3");
+    exit(1);
+  }
+
+  setNbSecondes(0);
+  setTexte("");
 }
 
 void WindowAdmin::on_pushButtonQuitter_clicked()
 {
-  // TO DO
+  message.type = 1;
+  message.expediteur = getpid();
+  message.requete = LOGOUT_ADMIN;
+  if(msgsnd(idQ, &message, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+  {
+    msgctl(idQ, IPC_RMID, NULL);
+    perror("(ADMIN) Erreur de msgsnd - 4");
+    exit(1);
+  }
   exit(0);
 }

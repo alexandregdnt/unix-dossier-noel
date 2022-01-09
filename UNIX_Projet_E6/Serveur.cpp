@@ -19,6 +19,7 @@ int idQ,idShm,idSem, idPub;
 TAB_CONNEXIONS *tab;
 struct sigaction  Action;
 sigjmp_buf contexte;
+int pidAdministrateur;
 
 union semun
 {
@@ -35,6 +36,8 @@ MYSQL* connexion;
 
 int main()
 {
+  pidAdministrateur = 0;
+
   // Connection à la BD
   connexion = mysql_init(NULL);
   if (mysql_real_connect(connexion,"localhost","Student","PassStudent1_","PourStudent",0,0,0) == NULL)
@@ -120,22 +123,19 @@ int main()
   MYSQL_ROW  tuple;
   PUBLICITE pub;
 
-  /*sigset_t mask,oldMask;
-  sigfillset(&mask);*/
   sigsetjmp(contexte, 1);
 
   while(1)
   {
   	fprintf(stderr,"(SERVEUR %d) Attente d'une requete...\n",getpid());
     
-    //sigprocmask(SIG_SETMASK,&mask,&oldMask);
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),1,0) == -1)
     {
       perror("(SERVEUR) Erreur de msgrcv - 1");
       msgctl(idQ,IPC_RMID,NULL);
       exit(1);
     }
-    //sigprocmask(SIG_SETMASK,&oldMask,NULL);
+    
     switch(m.requete)
     {
       case CONNECT :  
@@ -537,41 +537,74 @@ int main()
       case LOGIN_ADMIN :
                       fprintf(stderr,"(SERVEUR %d) Requete LOGIN_ADMIN reçue de %d\n",getpid(),m.expediteur);
 
-                      if(tab->pidAdmin == 0) {
-                          tab->pidAdmin = m.expediteur;
+                      reponse.expediteur = 1;
+                      reponse.type = m.expediteur;
+                      reponse.requete = LOGIN_ADMIN;
 
-                          m.type = m.expediteur;
-                          m.expediteur = 1;
-                          m.requete = LOGIN_ADMIN;
-
-                          strcpy(m.data1, "OK");
-                      } else {
-                          strcpy(m.data1, "KO");
-                      }
-
-                      if(msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+                      if(pidAdministrateur == 0)
                       {
-                          msgctl(idQ, IPC_RMID, NULL);
-                          perror("(SERVEUR) Erreur de msgsnd - 1");
-                          exit(1);
+                        strcpy(reponse.data1, "OK");
+                        pidAdministrateur = m.expediteur;
                       }
+                      else
+                      {
+                        strcpy(reponse.data1, "KO");
+                      }
+
+                      if(msgsnd(idQ, &reponse, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+                      {
+                        msgctl(idQ, IPC_RMID, NULL);
+                        perror("(SERVEUR) Erreur de msgsnd - 5");
+                        exit(1);
+                      }
+
 
                       break;
 
       case LOGOUT_ADMIN :
                       fprintf(stderr,"(SERVEUR %d) Requete LOGOUT_ADMIN reçue de %d\n",getpid(),m.expediteur);
+                      
+                      pidAdministrateur = 0;
+                      
                       break;
 
       case NEW_USER :
                       fprintf(stderr,"(SERVEUR %d) Requete NEW_USER reçue de %d : --%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2);
+
+                      sprintf(requete,"insert into UNIX_FINAL values (NULL,'%s','%s','%s','%s');",m.data1,m.data2,"---","---");
+                      mysql_query(connexion,requete);
+
                       break;
 
       case DELETE_USER :
                       fprintf(stderr,"(SERVEUR %d) Requete DELETE_USER reçue de %d : --%s--\n",getpid(),m.expediteur,m.data1);
+
+                      sprintf(requete,"DELETE FROM UNIX_FINAL WHERE nom = '%s';",m.data1);
+                      mysql_query(connexion,requete);
+
                       break;
 
       case NEW_PUB :
                       fprintf(stderr,"(SERVEUR %d) Requete NEW_PUB reçue de %d\n",getpid(),m.expediteur);
+                      PUBLICITE pub;
+                      int fd;
+                      pub.nbSecondes = atoi(m.data1);
+                      strcpy(pub.texte, m.texte);
+
+                      if ((fd = open("publicites.dat", O_WRONLY | O_APPEND)) == -1)
+                      {
+                        perror("Erreur de open");
+                        exit(1);
+                      }
+
+                      if (write(fd,&pub,sizeof(PUBLICITE)) != sizeof(PUBLICITE))
+                      {
+                        perror("Erreur de write");
+                        exit(1);
+                      }
+
+                      close(fd);
+
                       break;
     }
     afficheTab();
